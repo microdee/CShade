@@ -3,6 +3,10 @@
 #include "shared/cImageProcessing.fxh"
 #include "shared/cVideoProcessing.fxh"
 
+#ifndef USE_LAUNCHPAD
+#define USE_LAUNCHPAD 0
+#endif
+
 /*
     This is free and unencumbered software released into the public domain.
 
@@ -18,7 +22,7 @@
     successors. We intend this dedication to be an overt act of
     relinquishment in perpetuity of all present and future rights to this
     software under copyright law.
-
+    
     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
     EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
     MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -29,6 +33,13 @@
 
     For more information, please refer to <http://unlicense.org/>
 */
+
+#if USE_LAUNCHPAD
+namespace Deferred 
+{
+	texture MotionVectorsTex { Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RG16F; };
+}
+#endif
 
 namespace kDatamosh
 {
@@ -114,13 +125,19 @@ namespace kDatamosh
     CREATE_SAMPLER(SampleTempTex3, TempTex3_RG16F, LINEAR, MIRROR)
     CREATE_SAMPLER(SampleTempTex4, TempTex4_RG16F, LINEAR, MIRROR)
     CREATE_SAMPLER(SampleTempTex5, TempTex5_RG16F, LINEAR, MIRROR)
-    CREATE_SAMPLER(SampleFilteredFlowTex, TempTex2b_RG16F, FILTERING, MIRROR)
 
     CREATE_TEXTURE(Tex2c, BUFFER_SIZE_2, RG16F, 8)
     CREATE_SAMPLER(SampleTex2c, Tex2c, LINEAR, MIRROR)
-
+    
+#if USE_LAUNCHPAD
+    CREATE_SAMPLER(SampleOFlowTex, Deferred::MotionVectorsTex, LINEAR, MIRROR)
+    CREATE_SAMPLER(SampleFilteredFlowTex, Deferred::MotionVectorsTex, FILTERING, MIRROR)
+#else
     CREATE_TEXTURE(OFlowTex, BUFFER_SIZE_2, RG16F, 1)
     CREATE_SAMPLER(SampleOFlowTex, OFlowTex, LINEAR, MIRROR)
+    CREATE_SAMPLER(SampleFilteredFlowTex, TempTex2b_RG16F, FILTERING, MIRROR)
+#endif
+
 
     CREATE_TEXTURE(AccumTex, BUFFER_SIZE_0, R16F, 1)
     CREATE_SAMPLER(SampleAccumTex, AccumTex, FILTERING, MIRROR)
@@ -203,7 +220,8 @@ namespace kDatamosh
         Random.z = RandUV(Tex.yx - Time.xx);
 
         // Normalized screen space -> Pixel coordinates
-        MV = DecodeVectors(MV * _Scale, TexSize);
+        float Scale = USE_LAUNCHPAD ? -_Scale : _Scale;
+        MV = DecodeVectors(MV * Scale, TexSize);
 
         // Small random displacement (diffusion)
         MV += (Random.xy - 0.5)  * _Diffusion;
@@ -323,6 +341,8 @@ namespace kDatamosh
         CREATE_PASS(VS_Quad, PS_PyLK_Level4, TempTex5_RG16F)
         CREATE_PASS(VS_Quad, PS_PyLK_Level3, TempTex4_RG16F)
         CREATE_PASS(VS_Quad, PS_PyLK_Level2, TempTex3_RG16F)
+        
+#if !USE_LAUNCHPAD
         pass GetFineOpticalFlow
         {
             ClearRenderTargets = FALSE;
@@ -335,7 +355,7 @@ namespace kDatamosh
             PixelShader = PS_PyLK_Level1;
             RenderTarget0 = OFlowTex;
         }
-
+#endif
         // Postfilter blur
         pass MRT_CopyAndBlur
         {
