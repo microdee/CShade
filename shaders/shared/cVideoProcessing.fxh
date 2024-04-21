@@ -8,14 +8,45 @@
         [Functions]
     */
 
+    float GetHalfMax()
+    {
+        // Get the Half format distribution of bits
+        // Sign Exponent Significand
+        // 0    00000    000000000
+        const int SignBit = 0;
+        const int ExponentBits = 5;
+        const int SignificandBits = 10;
+
+        const int Bias = -15;
+        const int Exponent = exp2(ExponentBits);
+        const int Significand = exp2(SignificandBits);
+
+        const float MaxExponent = ((float)Exponent - (float)exp2(1)) + (float)Bias;
+        const float MaxSignificand = 1.0 + (((float)Significand - 1.0) / (float)Significand);
+
+        return (float)pow(-1, SignBit) * (float)exp2(MaxExponent) * MaxSignificand;
+    }
+
+    // [-Half, Half] -> [-1.0, 1.0]
+    float2 UnpackMotionVectors(float2 Half2)
+    {
+        return clamp(Half2 / GetHalfMax(), -1.0, 1.0);
+    }
+
+    // [-1.0, 1.0] -> [-Half, Half]
+    float2 PackMotionVectors(float2 Half2)
+    {
+        return Half2 * GetHalfMax();
+    }
+
     // [-1.0, 1.0] -> [Width, Height]
-    float2 DecodeVectors(float2 Vectors, float2 ImageSize)
+    float2 UnnormalizeMotionVectors(float2 Vectors, float2 ImageSize)
     {
         return Vectors / abs(ImageSize);
     }
 
     // [Width, Height] -> [-1.0, 1.0]
-    float2 EncodeVectors(float2 Vectors, float2 ImageSize)
+    float2 NormalizeMotionVectors(float2 Vectors, float2 ImageSize)
     {
         return clamp(Vectors * abs(ImageSize), -1.0, 1.0);
     }
@@ -50,6 +81,9 @@
         // Get required data to calculate main texel data
         const float Pi2 = acos(-1.0) * 2.0;
 
+        // Unpack motion vectors
+        Vectors = UnpackMotionVectors(Vectors);
+
         // Calculate main texel data (TexelSize, TexelLOD)
         WarpTex = float4(MainTex, MainTex + Vectors);
 
@@ -58,10 +92,6 @@
         float4 TexIy = ddy(WarpTex);
         float2 PixelSize = abs(TexIx.xy) + abs(TexIy.xy);
 
-        // Un-normalize data for processing
-        WarpTex *= (1.0 / abs(PixelSize.xyxy));
-        Vectors = DecodeVectors(Vectors, PixelSize);
-
         [loop] for(int i = 1; i < 4; ++i)
         {
             [loop] for(int j = 0; j < 4 * i; ++j)
@@ -69,23 +99,25 @@
                 float Shift = (Pi2 / (4.0 * float(i))) * float(j);
                 float2 AngleShift = 0.0;
                 sincos(Shift, AngleShift.x, AngleShift.y);
-                float4 Tex = WarpTex + (AngleShift.xyxy * float(i));
+                AngleShift *= float(i);
+
+                // Get temporal gradient
+                float4 TexIT = WarpTex.xyzw + (AngleShift.xyxy * PixelSize.xyxy);
+                float2 I0 = tex2Dgrad(SampleI0, TexIT.xy, TexIx.xy, TexIy.xy).rg;
+                float2 I1 = tex2Dgrad(SampleI1, TexIT.zw, TexIx.zw, TexIy.zw).rg;
+                float2 IT = I0 - I1;
 
                 // Get spatial gradient
-                float4 NS = (Tex.xyxy + float4(0.0, -1.0, 0.0, 1.0)) * PixelSize.xyxy;
-                float4 EW = (Tex.xyxy + float4(-1.0, 0.0, 1.0, 0.0)) * PixelSize.xyxy;
+                float4 OffsetNS = AngleShift.xyxy + float4(0.0, -1.0, 0.0, 1.0);
+                float4 OffsetEW = AngleShift.xyxy + float4(-1.0, 0.0, 1.0, 0.0);
+                float4 NS = WarpTex.xyxy + (OffsetNS * PixelSize.xyxy);
+                float4 EW = WarpTex.xyxy + (OffsetEW * PixelSize.xyxy);
                 float2 N = tex2Dgrad(SampleI0, NS.xy, TexIx.xy, TexIy.xy).rg;
                 float2 S = tex2Dgrad(SampleI0, NS.zw, TexIx.xy, TexIy.xy).rg;
                 float2 E = tex2Dgrad(SampleI0, EW.xy, TexIx.xy, TexIy.xy).rg;
                 float2 W = tex2Dgrad(SampleI0, EW.zw, TexIx.xy, TexIy.xy).rg;
                 float2 Ix = E - W;
                 float2 Iy = N - S;
-
-                // Get temporal gradient
-                float4 TexIT = Tex.xyzw * PixelSize.xyxy;
-                float2 I0 = tex2Dgrad(SampleI0, TexIT.xy, TexIx.xy, TexIy.xy).rg;
-                float2 I1 = tex2Dgrad(SampleI1, TexIT.zw, TexIx.zw, TexIy.zw).rg;
-                float2 IT = I0 - I1;
 
                 // IxIx = A11; IyIy = A22; IxIy = A12/A22
                 IxIx += dot(Ix, Ix);
@@ -113,8 +145,14 @@
         // Calculate A^T*B
         float2 Flow = (D == 0.0) ? 0.0 : mul(B, A);
 
-        // Propagate and encode vectors
-        return EncodeVectors(Vectors + Flow, PixelSize);
+        // Propagate normalized motion vectors
+        Vectors += NormalizeMotionVectors(Flow, PixelSize);
+
+        // Clamp motion vectors to restrict range to valid lengths
+        Vectors = clamp(Vectors, -1.0, 1.0);
+
+        // Pack motion vectors to Half format
+        return PackMotionVectors(Vectors);
     }
 
     /*
@@ -155,7 +193,7 @@
 
     void SampleBlock(in sampler2D Source, in float2 Tex, in float2 Ix, in float2 Iy, in float2 PixelSize, out float2 Pixel[4])
     {
-        float4 HalfPixel = (Tex.xxyy + float4(-0.5, 0.5, -0.5, 0.5)) * PixelSize.xxyy;
+        float4 HalfPixel = Tex.xxyy + (float4(-0.5, 0.5, -0.5, 0.5) * PixelSize.xxyy);
         Pixel[0] = tex2Dgrad(Source, HalfPixel.xz, Ix, Iy).xy;
         Pixel[1] = tex2Dgrad(Source, HalfPixel.xw, Ix, Iy).xy;
         Pixel[2] = tex2Dgrad(Source, HalfPixel.yz, Ix, Iy).xy;
@@ -192,7 +230,7 @@
                 sincos(Shift, AngleShift.x, AngleShift.y);
                 AngleShift *= float(i);
 
-                SampleBlock(SampleImage, B.Tex.zw + AngleShift, B.TexIx.zw, B.TexIy.zw, B.PixelSize, Image);
+                SampleBlock(SampleImage, B.Tex.zw + (AngleShift * B.PixelSize), B.TexIx.zw, B.TexIy.zw, B.PixelSize, Image);
                 float SAD = GetSAD(Template, Image);
                 Vectors = (SAD < Minimum) ? AngleShift : Vectors;
                 Minimum = min(SAD, Minimum);
@@ -214,15 +252,14 @@
         // Initialize data
         Block B;
 
+        // Un-normalize data for processing
+        Vectors = UnpackMotionVectors(Vectors);
+
         // Calculate main texel data (TexelSize, TexelLOD)
         B.Tex = float4(MainTex, MainTex + Vectors);
         B.TexIx = ddx(B.Tex);
         B.TexIy = ddy(B.Tex);
         B.PixelSize = abs(B.TexIx.xy) + abs(B.TexIy.xy);
-
-        // Un-normalize data for processing
-        B.Tex *= (1.0 / B.PixelSize.xyxy);
-        Vectors = DecodeVectors(Vectors, B.PixelSize);
 
         // Pre-calculate template
         float2 Template[4];
@@ -230,7 +267,7 @@
 
         // Calculate three-step search
         // Propagate and encode vectors
-        Vectors += SearchArea(SampleImage, B, Template);
-        return EncodeVectors(Vectors, B.PixelSize);
+        Vectors += NormalizeMotionVectors(SearchArea(SampleImage, B, Template), B.PixelSize);
+        return PackMotionVectors(Vectors);
     }
 #endif

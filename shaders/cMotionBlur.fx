@@ -73,7 +73,7 @@ namespace cMotionBlur
     float2 PS_Normalize(VS2PS_Quad Input) : SV_TARGET0
     {
         float3 Color = tex2D(CShade_SampleColorTex, Input.Tex0).rgb;
-        return GetSphericalRG(Color);
+        return RGBtoHS(Color);
     }
 
     float2 PS_HBlur_Prefilter(VS2PS_Quad Input) : SV_TARGET0
@@ -138,7 +138,7 @@ namespace cMotionBlur
         float2 ScreenSize = float2(BUFFER_WIDTH, BUFFER_HEIGHT);
         float2 ScreenCoord = Input.Tex0.xy;
 
-        float2 Velocity = tex2Dlod(SampleTempTex2b, float4(Input.Tex0.xy, 0.0, _MipBias)).xy;
+        float2 Velocity = UnpackMotionVectors(tex2Dlod(SampleTempTex2b, float4(Input.Tex0.xy, 0.0, _MipBias)).xy);
 
         float2 ScaledVelocity = Velocity * _Scale;
         ScaledVelocity = (_FrameRateScaling) ? ScaledVelocity / FrameTimeRatio : ScaledVelocity;

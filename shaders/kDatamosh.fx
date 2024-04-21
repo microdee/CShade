@@ -152,7 +152,7 @@ namespace kDatamosh
     float2 PS_Normalize(VS2PS_Quad Input) : SV_TARGET0
     {
         float3 Color = tex2D(CShade_SampleColorTex, Input.Tex0).rgb;
-        return GetSphericalRG(Color);
+        return RGBtoHS(Color);
     }
 
     float2 PS_HBlur_Prefilter(VS2PS_Quad Input) : SV_TARGET0
@@ -221,7 +221,7 @@ namespace kDatamosh
 
         // Normalized screen space -> Pixel coordinates
         float Scale = USE_LAUNCHPAD ? -_Scale : _Scale;
-        MV = DecodeVectors(MV * Scale, TexSize);
+        MV = UnnormalizeMotionVectors(MV * Scale, TexSize);
 
         // Small random displacement (diffusion)
         MV += (Random.xy - 0.5)  * _Diffusion;
@@ -236,7 +236,7 @@ namespace kDatamosh
         float3 Random = 0.0;
 
         // Motion vectors
-        float2 MV = tex2Dlod(SampleFilteredFlowTex, float4(Input.Tex0, 0.0, _MipBias)).xy;
+        float2 MV = UnpackMotionVectors(tex2Dlod(SampleFilteredFlowTex, float4(Input.Tex0, 0.0, _MipBias)).xy);
 
         // Get motion blocks
         MV = GetMVBlocks(MV, Input.Tex0, Random);
@@ -275,7 +275,7 @@ namespace kDatamosh
         float3 Random = 0.0;
 
         // Motion vectors
-        float2 MV = tex2Dlod(SampleFilteredFlowTex, float4(Input.Tex0, 0.0, _MipBias)).xy;
+        float2 MV = UnpackMotionVectors(tex2Dlod(SampleFilteredFlowTex, float4(Input.Tex0, 0.0, _MipBias)).xy);
 
         // Get motion blocks
         MV = GetMVBlocks(MV, Input.Tex0, Random);
@@ -284,7 +284,7 @@ namespace kDatamosh
         float RandomMotion = RandUV(Input.Tex0 + length(MV));
 
         // Pixel coordinates -> Normalized screen space
-        MV = EncodeVectors(MV, TexSize);
+        MV = NormalizeMotionVectors(MV, TexSize);
 
         // Color from the original image
         float4 Source = tex2D(CShade_SampleColorTex, Input.Tex0);
