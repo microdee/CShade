@@ -1,4 +1,6 @@
-#include "shared/cGraphics.fxh"
+
+#include "shared/cShade.fxh"
+#include "shared/cMath.fxh"
 
 /*
     [Shader Options]
@@ -32,25 +34,20 @@ uniform float _Intensity <
     [Pixel Shaders]
 */
 
-float Med3(float x, float y, float z)
-{
-    return max(min(x, y), min(max(x, y), z));
-}
-
-float4 PS_Threshold(VS2PS_Quad Input) : SV_TARGET0
+float4 PS_Threshold(CShade_VS2PS_Quad Input) : SV_TARGET0
 {
     const float Knee = mad(_Threshold, _Smooth, 1e-5f);
     const float3 Curve = float3(_Threshold - Knee, Knee * 2.0, 0.25 / Knee);
     float4 Color = tex2D(CShade_SampleColorTex, Input.Tex0);
 
     // Under-threshold
-    float Brightness = Med3(Color.r, Color.g, Color.b);
+    float Brightness = CMath_Med3(Color.r, Color.g, Color.b);
     float ResponseCurve = clamp(Brightness - Curve.x, 0.0, Curve.y);
     ResponseCurve = Curve.z * ResponseCurve * ResponseCurve;
 
     // Combine and apply the brightness response curve
     Color = Color * max(ResponseCurve, Brightness - _Threshold) / max(Brightness, 1e-10);
-    Brightness = Med3(Color.r, Color.g, Color.b);
+    Brightness = CMath_Med3(Color.r, Color.g, Color.b);
     return saturate(lerp(Brightness, Color, _Saturation) * _Intensity);
 }
 
@@ -60,7 +57,7 @@ technique CShade_Threshold
     {
         SRGBWriteEnable = WRITE_SRGB;
 
-        VertexShader = VS_Quad;
+        VertexShader = CShade_VS_Quad;
         PixelShader = PS_Threshold;
     }
 }

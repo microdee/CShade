@@ -1,4 +1,5 @@
-#include "shared/cGraphics.fxh"
+
+#include "shared/cShade.fxh"
 
 /*
     MIT License
@@ -46,7 +47,7 @@ uniform bool _Symmetry <
     [Pixel Shaders]
 */
 
-float4 PS_Mirror(VS2PS_Quad Input) : SV_TARGET0
+float4 PS_Mirror(CShade_VS2PS_Quad Input) : SV_TARGET0
 {
     // Convert to polar coordinates
     float2 Polar = (Input.Tex0 * 2.0) - 1.0;
@@ -60,7 +61,8 @@ float4 PS_Mirror(VS2PS_Quad Input) : SV_TARGET0
     Phi += _Roll - _Offset;
 
     // Convert back to the texture coordinate.
-    float2 PhiSinCos; sincos(Phi, PhiSinCos.x, PhiSinCos.y);
+    float2 PhiSinCos;
+    sincos(Phi, PhiSinCos.x, PhiSinCos.y);
     Input.Tex0 = ((PhiSinCos.yx * Radius) * 0.5) + 0.5;
 
     // Reflection at the border of the screen.
@@ -74,7 +76,7 @@ technique CShade_KinoMirror
     {
         SRGBWriteEnable = WRITE_SRGB;
 
-        VertexShader = VS_Quad;
+        VertexShader = CShade_VS_Quad;
         PixelShader = PS_Mirror;
     }
 }

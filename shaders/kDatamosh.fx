@@ -1,7 +1,8 @@
-#include "shared/cBuffers.fxh"
-#include "shared/cGraphics.fxh"
-#include "shared/cImageProcessing.fxh"
-#include "shared/cVideoProcessing.fxh"
+
+#include "shared/cShade.fxh"
+#include "shared/cColor.fxh"
+#include "shared/cBlur.fxh"
+#include "shared/cMotionEstimation.fxh"
 
 #ifndef USE_LAUNCHPAD
 #define USE_LAUNCHPAD 0
@@ -119,6 +120,13 @@ namespace kDatamosh
         [Textures and samplers]
     */
 
+    CREATE_TEXTURE_POOLED(TempTex1_RG8, BUFFER_SIZE_1, RG8, 3)
+    CREATE_TEXTURE_POOLED(TempTex2a_RG16F, BUFFER_SIZE_2, RG16F, 8)
+    CREATE_TEXTURE_POOLED(TempTex2b_RG16F, BUFFER_SIZE_2, RG16F, 8)
+    CREATE_TEXTURE_POOLED(TempTex3_RG16F, BUFFER_SIZE_3, RG16F, 1)
+    CREATE_TEXTURE_POOLED(TempTex4_RG16F, BUFFER_SIZE_4, RG16F, 1)
+    CREATE_TEXTURE_POOLED(TempTex5_RG16F, BUFFER_SIZE_5, RG16F, 1)
+
     CREATE_SAMPLER(SampleTempTex1, TempTex1_RG8, LINEAR, MIRROR)
     CREATE_SAMPLER(SampleTempTex2a, TempTex2a_RG16F, LINEAR, MIRROR)
     CREATE_SAMPLER(SampleTempTex2b, TempTex2b_RG16F, LINEAR, MIRROR)
@@ -149,56 +157,56 @@ namespace kDatamosh
         [Pixel Shaders]
     */
 
-    float2 PS_Normalize(VS2PS_Quad Input) : SV_TARGET0
+    float2 PS_Normalize(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float3 Color = tex2D(CShade_SampleColorTex, Input.Tex0).rgb;
-        return RGBtoHS(Color);
+        return CColor_GetSphericalRG(Color).xy;
     }
 
-    float2 PS_HBlur_Prefilter(VS2PS_Quad Input) : SV_TARGET0
+    float2 PS_HBlur_Prefilter(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
-        return GetPixelBlur(Input, SampleTempTex1, true).rg;
+        return CBlur_GetPixelBlur(Input, SampleTempTex1, true).rg;
     }
 
-    float2 PS_VBlur_Prefilter(VS2PS_Quad Input) : SV_TARGET0
+    float2 PS_VBlur_Prefilter(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
-        return GetPixelBlur(Input, SampleTempTex2a, false).rg;
+        return CBlur_GetPixelBlur(Input, SampleTempTex2a, false).rg;
     }
 
-    float2 PS_PyLK_Level4(VS2PS_Quad Input) : SV_TARGET0
+    float2 PS_PyLK_Level4(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float2 Vectors = 0.0;
-        return GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b);
+        return CMotionEstimation_GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b);
     }
 
-    float2 PS_PyLK_Level3(VS2PS_Quad Input) : SV_TARGET0
+    float2 PS_PyLK_Level3(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float2 Vectors = tex2D(SampleTempTex5, Input.Tex0).xy;
-        return GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b);
+        return CMotionEstimation_GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b);
     }
 
-    float2 PS_PyLK_Level2(VS2PS_Quad Input) : SV_TARGET0
+    float2 PS_PyLK_Level2(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float2 Vectors = tex2D(SampleTempTex4, Input.Tex0).xy;
-        return GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b);
+        return CMotionEstimation_GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b);
     }
 
-    float4 PS_PyLK_Level1(VS2PS_Quad Input) : SV_TARGET0
+    float4 PS_PyLK_Level1(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float2 Vectors = tex2D(SampleTempTex3, Input.Tex0).xy;
-        return float4(GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b), 0.0, _BlendFactor);
+        return float4(CMotionEstimation_GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b), 0.0, _BlendFactor);
     }
 
     // NOTE: We use MRT to immeduately copy the current blurred frame for the next frame
-    float4 PS_HBlur_Postfilter(VS2PS_Quad Input, out float4 Copy : SV_TARGET0) : SV_TARGET1
+    float4 PS_HBlur_Postfilter(CShade_VS2PS_Quad Input, out float4 Copy : SV_TARGET0) : SV_TARGET1
     {
         Copy = tex2D(SampleTempTex2b, Input.Tex0.xy);
-        return float4(GetPixelBlur(Input, SampleOFlowTex, true).rg, 0.0, 1.0);
+        return float4(CBlur_GetPixelBlur(Input, SampleOFlowTex, true).rg, 0.0, 1.0);
     }
 
-    float4 PS_VBlur_Postfilter(VS2PS_Quad Input) : SV_TARGET0
+    float4 PS_VBlur_Postfilter(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
-        return float4(GetPixelBlur(Input, SampleTempTex2a, false).rg, 0.0, 1.0);
+        return float4(CBlur_GetPixelBlur(Input, SampleTempTex2a, false).rg, 0.0, 1.0);
     }
 
     // Datamosh
@@ -221,7 +229,7 @@ namespace kDatamosh
 
         // Normalized screen space -> Pixel coordinates
         float Scale = USE_LAUNCHPAD ? -_Scale : _Scale;
-        MV = UnnormalizeMotionVectors(MV * Scale, TexSize);
+        MV = CMotionEstimation_UnnormalizeMotionVectors(MV * Scale, TexSize);
 
         // Small random displacement (diffusion)
         MV += (Random.xy - 0.5)  * _Diffusion;
@@ -230,13 +238,13 @@ namespace kDatamosh
         return round(MV);
     }
 
-    float4 PS_Accumulate(VS2PS_Quad Input) : SV_TARGET0
+    float4 PS_Accumulate(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float Quality = 1.0 - _Entropy;
         float3 Random = 0.0;
 
         // Motion vectors
-        float2 MV = UnpackMotionVectors(tex2Dlod(SampleFilteredFlowTex, float4(Input.Tex0, 0.0, _MipBias)).xy);
+        float2 MV = CMotionEstimation_UnpackMotionVectors(tex2Dlod(SampleFilteredFlowTex, float4(Input.Tex0, 0.0, _MipBias)).xy);
 
         // Get motion blocks
         MV = GetMVBlocks(MV, Input.Tex0, Random);
@@ -248,10 +256,10 @@ namespace kDatamosh
 
         // Simple update
         float UpdateAcc = min(MVLength, _BlockSize) * 0.005;
-        UpdateAcc += (Random.z * lerp(-0.02, 0.02, Quality));
+        UpdateAcc += lerp(-Random.z, Random.z, Quality * 0.02);
 
         // Reset to random level
-        float ResetAcc = saturate(Random.z * 0.5 + Quality);
+        float ResetAcc = (Random.z * 0.5) + Quality;
 
         // Reset if the amount of motion is larger than the block size.
         [branch]
@@ -267,7 +275,7 @@ namespace kDatamosh
         return OutputColor;
     }
 
-    float4 PS_Datamosh(VS2PS_Quad Input) : SV_TARGET0
+    float4 PS_Datamosh(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float2 TexSize = fwidth(Input.Tex0);
         const float2 DisplacementTexel = BUFFER_SIZE_0;
@@ -275,7 +283,7 @@ namespace kDatamosh
         float3 Random = 0.0;
 
         // Motion vectors
-        float2 MV = UnpackMotionVectors(tex2Dlod(SampleFilteredFlowTex, float4(Input.Tex0, 0.0, _MipBias)).xy);
+        float2 MV = CMotionEstimation_UnpackMotionVectors(tex2Dlod(SampleFilteredFlowTex, float4(Input.Tex0, 0.0, _MipBias)).xy);
 
         // Get motion blocks
         MV = GetMVBlocks(MV, Input.Tex0, Random);
@@ -284,7 +292,7 @@ namespace kDatamosh
         float RandomMotion = RandUV(Input.Tex0 + length(MV));
 
         // Pixel coordinates -> Normalized screen space
-        MV = NormalizeMotionVectors(MV, TexSize);
+        MV = CMotionEstimation_NormalizeMotionVectors(MV, TexSize);
 
         // Color from the original image
         float4 Source = tex2D(CShade_SampleColorTex, Input.Tex0);
@@ -315,7 +323,7 @@ namespace kDatamosh
         return lerp(Work, Source, CW);
     }
 
-    float4 PS_CopyColorTex(VS2PS_Quad Input) : SV_TARGET0
+    float4 PS_CopyColorTex(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         return tex2D(CShade_SampleColorTex, Input.Tex0);
     }
@@ -331,16 +339,16 @@ namespace kDatamosh
     technique CShade_KinoDatamosh
     {
         // Normalize current frame
-        CREATE_PASS(VS_Quad, PS_Normalize, TempTex1_RG8)
+        CREATE_PASS(CShade_VS_Quad, PS_Normalize, TempTex1_RG8)
 
         // Prefilter blur
-        CREATE_PASS(VS_Quad, PS_HBlur_Prefilter, TempTex2a_RG16F)
-        CREATE_PASS(VS_Quad, PS_VBlur_Prefilter, TempTex2b_RG16F)
+        CREATE_PASS(CShade_VS_Quad, PS_HBlur_Prefilter, TempTex2a_RG16F)
+        CREATE_PASS(CShade_VS_Quad, PS_VBlur_Prefilter, TempTex2b_RG16F)
 
         // Bilinear Lucas-Kanade Optical Flow
-        CREATE_PASS(VS_Quad, PS_PyLK_Level4, TempTex5_RG16F)
-        CREATE_PASS(VS_Quad, PS_PyLK_Level3, TempTex4_RG16F)
-        CREATE_PASS(VS_Quad, PS_PyLK_Level2, TempTex3_RG16F)
+        CREATE_PASS(CShade_VS_Quad, PS_PyLK_Level4, TempTex5_RG16F)
+        CREATE_PASS(CShade_VS_Quad, PS_PyLK_Level3, TempTex4_RG16F)
+        CREATE_PASS(CShade_VS_Quad, PS_PyLK_Level2, TempTex3_RG16F)
         
 #if !USE_LAUNCHPAD
         pass GetFineOpticalFlow
@@ -351,7 +359,7 @@ namespace kDatamosh
             SrcBlend = INVSRCALPHA;
             DestBlend = SRCALPHA;
 
-            VertexShader = VS_Quad;
+            VertexShader = CShade_VS_Quad;
             PixelShader = PS_PyLK_Level1;
             RenderTarget0 = OFlowTex;
         }
@@ -359,7 +367,7 @@ namespace kDatamosh
         // Postfilter blur
         pass MRT_CopyAndBlur
         {
-            VertexShader = VS_Quad;
+            VertexShader = CShade_VS_Quad;
             PixelShader = PS_HBlur_Postfilter;
             RenderTarget0 = Tex2c;
             RenderTarget1 = TempTex2a_RG16F;
@@ -367,7 +375,7 @@ namespace kDatamosh
 
         pass
         {
-            VertexShader = VS_Quad;
+            VertexShader = CShade_VS_Quad;
             PixelShader = PS_VBlur_Postfilter;
             RenderTarget0 = TempTex2b_RG16F;
         }
@@ -381,7 +389,7 @@ namespace kDatamosh
             SrcBlend = ONE;
             DestBlend = SRCALPHA; // The result about to accumulate
 
-            VertexShader = VS_Quad;
+            VertexShader = CShade_VS_Quad;
             PixelShader = PS_Accumulate;
             RenderTarget0 = AccumTex;
         }
@@ -390,7 +398,7 @@ namespace kDatamosh
         {
             SRGBWriteEnable = WRITE_SRGB;
 
-            VertexShader = VS_Quad;
+            VertexShader = CShade_VS_Quad;
             PixelShader = PS_Datamosh;
         }
 
@@ -399,7 +407,7 @@ namespace kDatamosh
         {
             SRGBWriteEnable = WRITE_SRGB;
 
-            VertexShader = VS_Quad;
+            VertexShader = CShade_VS_Quad;
             PixelShader = PS_CopyColorTex;
             RenderTarget0 = FeedbackTex;
         }

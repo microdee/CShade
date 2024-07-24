@@ -1,4 +1,5 @@
-#include "shared/cGraphics.fxh"
+
+#include "shared/cShade.fxh"
 
 /*
     [Shader Options]
@@ -15,7 +16,7 @@ uniform int2 _Pixels <
     [Pixel Shaders]
 */
 
-float4 PS_Color(VS2PS_Quad Input) : SV_TARGET0
+float4 PS_Color(CShade_VS2PS_Quad Input) : SV_TARGET0
 {
     float2 Tex = floor(Input.Tex0 * _Pixels) / _Pixels;
     float4 OutputColor = tex2D(CShade_SampleColorTex, Tex);
@@ -29,7 +30,7 @@ technique CShade_Pixelate
     {
         SRGBWriteEnable = WRITE_SRGB;
 
-        VertexShader = VS_Quad;
+        VertexShader = CShade_VS_Quad;
         PixelShader = PS_Color;
     }
 }

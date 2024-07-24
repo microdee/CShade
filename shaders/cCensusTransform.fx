@@ -1,4 +1,6 @@
-#include "shared/cGraphics.fxh"
+
+#include "shared/cShade.fxh"
+#include "shared/cMath.fxh"
 
 /*
     [Vertex Shaders]
@@ -12,7 +14,7 @@ struct VS2PS_Census
     float4 Tex2 : TEXCOORD2;
 };
 
-VS2PS_Census VS_Census(APP2VS Input)
+VS2PS_Census VS_Census(CShade_APP2VS Input)
 {
     // Sample locations:
     // [0].xy [1].xy [2].xy
@@ -22,7 +24,7 @@ VS2PS_Census VS_Census(APP2VS Input)
     const float2 PixelSize = 1.0 / float2(BUFFER_WIDTH, BUFFER_HEIGHT);
 
     // Get fullscreen texcoord and vertex position
-    VS2PS_Quad FSQuad = VS_Quad(Input);
+    CShade_VS2PS_Quad FSQuad = CShade_VS_Quad(Input);
 
     VS2PS_Census Output;
     Output.HPos = FSQuad.HPos;
@@ -35,11 +37,6 @@ VS2PS_Census VS_Census(APP2VS Input)
 /*
     [Pixel Shaders]
 */
-
-float Med3(float A, float B, float C)
-{
-    return clamp(A, min(B, C), max(B, C));
-}
 
 float4 PS_Census(VS2PS_Census Input) : SV_TARGET0
 {
@@ -65,7 +62,7 @@ float4 PS_Census(VS2PS_Census Input) : SV_TARGET0
         Transform += ldexp(Comparison, i);
     }
 
-    float OTransform = Med3(Transform.r, Transform.g, Transform.b);
+    float OTransform = CMath_Med3(Transform.r, Transform.g, Transform.b);
 
     // Convert the 8-bit integer to float, and average the results from each channel
     return OTransform * (1.0 / (exp2(8) - 1));

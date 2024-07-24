@@ -1,7 +1,8 @@
+
 #include "cMacros.fxh"
 
-#if !defined(CGRAPHICS_FXH)
-    #define CGRAPHICS_FXH
+#if !defined(INCLUDE_GRAPHICS)
+    #define INCLUDE_GRAPHICS
 
     /*
         [Buffer]
@@ -31,20 +32,20 @@
         [Simple Vertex Shader]
     */
 
-    struct APP2VS
+    struct CShade_APP2VS
     {
         uint ID : SV_VERTEXID;
     };
 
-    struct VS2PS_Quad
+    struct CShade_VS2PS_Quad
     {
         float4 HPos : SV_POSITION;
         float2 Tex0 : TEXCOORD0;
     };
 
-    VS2PS_Quad VS_Quad(APP2VS Input)
+    CShade_VS2PS_Quad CShade_VS_Quad(CShade_APP2VS Input)
     {
-        VS2PS_Quad Output;
+        CShade_VS2PS_Quad Output;
         Output.Tex0.x = (Input.ID == 2) ? 2.0 : 0.0;
         Output.Tex0.y = (Input.ID == 1) ? 2.0 : 0.0;
         Output.HPos = float4(Output.Tex0 * float2(2.0, -2.0) + float2(-1.0, 1.0), 0.0, 1.0);
@@ -55,32 +56,14 @@
         [Math Functions]
     */
 
-    int GetFactorial(int N)
+    int2 CShade_GetScreenSizeFromTex(float2 Tex)
     {
-        int O = N;
-        for (int i = 1 ; i < N; i++)
-        {
-            O *= i;
-        }
-        return O;
+        return max(round(1.0 / fwidth(Tex)), 1.0);
     }
 
-    float4 GetBlit(VS2PS_Quad Input, sampler2D SampleSource)
+    float2 CShade_GetPixelSizeFromTex(float2 Tex)
     {
-        return tex2D(SampleSource, Input.Tex0);
+        return 1.0 / CShade_GetScreenSizeFromTex(Tex);
     }
 
-    float GetMod(float X, float Y)
-    {
-        return X - Y * floor(X / Y);
-    }
-
-    float2 GetLOD(float2 Tex)
-    {
-        float2 Ix = ddx(Tex);
-        float2 Iy = ddy(Tex);
-        float Lx = dot(Ix, Ix);
-        float Ly = dot(Iy, Iy);
-        return float2(0.0, 0.5) * max(0.0, log2(max(Lx, Ly)));
-    }
 #endif

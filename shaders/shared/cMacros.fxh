@@ -1,12 +1,12 @@
 
-#if !defined(CMACROS_FXH)
+#if !defined(INCLUDE_MACROS)
     /*
         [Macros and macro accessories]
         ---
         https://graphics.stanford.edu/~seander/bithacks.html
     */
 
-    #define CMACROS_FXH
+    #define INCLUDE_MACROS
 
     #define GET_EVEN(X) (X + (X & 1))
     #define GET_MIN(X, Y) (Y ^ ((X ^ Y) & -(X < Y)))
@@ -35,7 +35,16 @@
         > = DEFAULT;
 
     #define CREATE_TEXTURE(TEXTURE_NAME, SIZE, FORMAT, LEVELS) \
-        texture2D TEXTURE_NAME \
+        texture2D TEXTURE_NAME < pooled = false; > \
+        { \
+            Width = SIZE.x; \
+            Height = SIZE.y; \
+            Format = FORMAT; \
+            MipLevels = LEVELS; \
+        };
+
+    #define CREATE_TEXTURE_POOLED(TEXTURE_NAME, SIZE, FORMAT, LEVELS) \
+        texture2D TEXTURE_NAME < pooled = true; > \
         { \
             Width = SIZE.x; \
             Height = SIZE.y; \
@@ -73,4 +82,5 @@
             AddressV = ADDRESS; \
             SRGBTexture = READ_SRGB; \
         };
+
 #endif

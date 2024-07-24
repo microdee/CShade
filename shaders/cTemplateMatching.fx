@@ -1,4 +1,5 @@
-#include "shared/cGraphics.fxh"
+
+#include "shared/cShade.fxh"
 
 namespace cTemplateMatching
 {
@@ -9,7 +10,7 @@ namespace cTemplateMatching
     uniform int _Method <
         ui_label = "Template Matching Method";
         ui_type = "combo";
-        ui_items = " SSD\0 NCC\0";
+        ui_items = "SSD\0NCC\0";
     > = 0;
 
     uniform int _Size <
@@ -33,13 +34,13 @@ namespace cTemplateMatching
         [Pixel Shaders]
     */
 
-    float PS_Blit0(VS2PS_Quad Input) : SV_TARGET0
+    float PS_Blit0(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float3 Color = tex2D(CShade_SampleColorTex, Input.Tex0).rgb;
         return dot(Color, 1.0 / 3.0);
     }
 
-    float4 PS_TemplateMatching(VS2PS_Quad Input) : SV_TARGET0
+    float4 PS_TemplateMatching(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float4 PixelSize = float4(1.0, 1.0, 0.0, 0.0) / BUFFER_SIZE_0.xyyy;
         float SumIT = 0.0;
@@ -86,7 +87,7 @@ namespace cTemplateMatching
         return O;
     }
 
-    float4 PS_Blit1(VS2PS_Quad Input) : SV_TARGET0
+    float4 PS_Blit1(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         return tex2D(SampleCurrentTex, Input.Tex0);
     }
@@ -95,7 +96,7 @@ namespace cTemplateMatching
     {
         pass
         {
-            VertexShader = VS_Quad;
+            VertexShader = CShade_VS_Quad;
             PixelShader = PS_Blit0;
 
             RenderTarget0 = CurrentTex;
@@ -105,13 +106,13 @@ namespace cTemplateMatching
         {
             SRGBWriteEnable = WRITE_SRGB;
 
-            VertexShader = VS_Quad;
+            VertexShader = CShade_VS_Quad;
             PixelShader = PS_TemplateMatching;
         }
 
         pass
         {
-            VertexShader = VS_Quad;
+            VertexShader = CShade_VS_Quad;
             PixelShader = PS_Blit1;
 
             RenderTarget0 = PreviousTex;

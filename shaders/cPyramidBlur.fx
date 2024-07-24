@@ -1,5 +1,5 @@
-#include "shared/cBuffers.fxh"
-#include "shared/cGraphics.fxh"
+
+#include "shared/cShade.fxh"
 
 namespace cPyramidBlur
 {
@@ -8,20 +8,25 @@ namespace cPyramidBlur
     */
 
     uniform int _Downscale <
-        ui_label = "Downscale kernel";
+        ui_label = "Downscale Kernel";
         ui_type = "combo";
-        ui_items = " 2x2 Box\0 3x3 Tent\0 Jorge\0 Kawase\0";
+        ui_items = "2x2 Box\03x3 Tent\0Jorge\0Kawase\0";
     > = 0;
 
     uniform int _Upscale <
-        ui_label = "Upscale kernel";
+        ui_label = "Upscale Kernel";
         ui_type = "combo";
-        ui_items = " 2x2 Box\0 3x3 Tent\0 Jorge\0 Kawase\0";
+        ui_items = "2x2 Box\03x3 Tent\0Jorge\0Kawase\0";
     > = 0;
 
     /*
         [Textures & Samplers]
     */
+
+    CREATE_TEXTURE_POOLED(TempTex1_RGBA16F, BUFFER_SIZE_1, RGBA16F, 1)
+    CREATE_TEXTURE_POOLED(TempTex2_RGBA16F, BUFFER_SIZE_2, RGBA16F, 1)
+    CREATE_TEXTURE_POOLED(TempTex3_RGBA16F, BUFFER_SIZE_3, RGBA16F, 1)
+    CREATE_TEXTURE_POOLED(TempTex4_RGBA16F, BUFFER_SIZE_4, RGBA16F, 1)
 
     CREATE_SAMPLER(SampleTempTex1, TempTex1_RGBA16F, LINEAR, CLAMP)
     CREATE_SAMPLER(SampleTempTex2, TempTex2_RGBA16F, LINEAR, CLAMP)
@@ -41,9 +46,9 @@ namespace cPyramidBlur
         float4 Tex3 : TEXCOORD3;
     };
 
-    VS2PS_Scale GetVertexScale(APP2VS Input, float2 PixelSize, int ScaleMethod)
+    VS2PS_Scale GetVertexScale(CShade_APP2VS Input, float2 PixelSize, int ScaleMethod)
     {
-        VS2PS_Quad FSQuad = VS_Quad(Input);
+        CShade_VS2PS_Quad FSQuad = CShade_VS_Quad(Input);
 
         VS2PS_Scale Output;
 
@@ -75,7 +80,7 @@ namespace cPyramidBlur
     }
 
     #define CREATE_VS_DOWNSCALE(METHOD_NAME, INV_BUFFER_SIZE) \
-        VS2PS_Scale METHOD_NAME(APP2VS Input) \
+        VS2PS_Scale METHOD_NAME(CShade_APP2VS Input) \
         { \
             return GetVertexScale(Input, INV_BUFFER_SIZE, _Downscale); \
         }
@@ -86,7 +91,7 @@ namespace cPyramidBlur
     CREATE_VS_DOWNSCALE(VS_Downscale4, 1.0 / BUFFER_SIZE_3)
 
     #define CREATE_VS_UPSCALE(METHOD_NAME, INV_BUFFER_SIZE) \
-        VS2PS_Scale METHOD_NAME(APP2VS Input) \
+        VS2PS_Scale METHOD_NAME(CShade_APP2VS Input) \
         { \
             return GetVertexScale(Input, INV_BUFFER_SIZE, _Upscale); \
         }

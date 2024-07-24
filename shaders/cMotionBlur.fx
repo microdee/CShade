@@ -1,7 +1,9 @@
-#include "shared/cBuffers.fxh"
-#include "shared/cGraphics.fxh"
-#include "shared/cImageProcessing.fxh"
-#include "shared/cVideoProcessing.fxh"
+
+#include "shared/cShade.fxh"
+#include "shared/cColor.fxh"
+#include "shared/cBlur.fxh"
+#include "shared/cMotionEstimation.fxh"
+#include "shared/cProcedural.fxh"
 
 namespace cMotionBlur
 {
@@ -53,6 +55,13 @@ namespace cMotionBlur
         [Textures & Samplers]
     */
 
+    CREATE_TEXTURE_POOLED(TempTex1_RG8, BUFFER_SIZE_1, RG8, 3)
+    CREATE_TEXTURE_POOLED(TempTex2a_RG16F, BUFFER_SIZE_2, RG16F, 8)
+    CREATE_TEXTURE_POOLED(TempTex2b_RG16F, BUFFER_SIZE_2, RG16F, 8)
+    CREATE_TEXTURE_POOLED(TempTex3_RG16F, BUFFER_SIZE_3, RG16F, 1)
+    CREATE_TEXTURE_POOLED(TempTex4_RG16F, BUFFER_SIZE_4, RG16F, 1)
+    CREATE_TEXTURE_POOLED(TempTex5_RG16F, BUFFER_SIZE_5, RG16F, 1)
+
     CREATE_SAMPLER(SampleTempTex1, TempTex1_RG8, LINEAR, MIRROR)
     CREATE_SAMPLER(SampleTempTex2a, TempTex2a_RG16F, LINEAR, MIRROR)
     CREATE_SAMPLER(SampleTempTex2b, TempTex2b_RG16F, LINEAR, MIRROR)
@@ -70,67 +79,66 @@ namespace cMotionBlur
         [Pixel Shaders]
     */
 
-    float2 PS_Normalize(VS2PS_Quad Input) : SV_TARGET0
+    float2 PS_Normalize(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float3 Color = tex2D(CShade_SampleColorTex, Input.Tex0).rgb;
-        return RGBtoHS(Color);
+        return CColor_GetSphericalRG(Color).xy;
     }
 
-    float2 PS_HBlur_Prefilter(VS2PS_Quad Input) : SV_TARGET0
+    float2 PS_HBlur_Prefilter(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
-        return GetPixelBlur(Input, SampleTempTex1, true).rg;
+        return CBlur_GetPixelBlur(Input, SampleTempTex1, true).rg;
     }
 
-    float2 PS_VBlur_Prefilter(VS2PS_Quad Input) : SV_TARGET0
+    float2 PS_VBlur_Prefilter(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
-        return GetPixelBlur(Input, SampleTempTex2a, false).rg;
+        return CBlur_GetPixelBlur(Input, SampleTempTex2a, false).rg;
     }
 
     // Run Lucas-Kanade
 
-    float2 PS_PyLK_Level4(VS2PS_Quad Input) : SV_TARGET0
+    float2 PS_PyLK_Level4(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float2 Vectors = 0.0;
-        return GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b);
+        return CMotionEstimation_GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b);
     }
 
-    float2 PS_PyLK_Level3(VS2PS_Quad Input) : SV_TARGET0
+    float2 PS_PyLK_Level3(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float2 Vectors = tex2D(SampleTempTex5, Input.Tex0).xy;
-        return GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b);
+        return CMotionEstimation_GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b);
     }
 
-    float2 PS_PyLK_Level2(VS2PS_Quad Input) : SV_TARGET0
+    float2 PS_PyLK_Level2(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float2 Vectors = tex2D(SampleTempTex4, Input.Tex0).xy;
-        return GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b);
+        return CMotionEstimation_GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b);
     }
 
-    float4 PS_PyLK_Level1(VS2PS_Quad Input) : SV_TARGET0
+    float4 PS_PyLK_Level1(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float2 Vectors = tex2D(SampleTempTex3, Input.Tex0).xy;
-        return float4(GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b), 0.0, _BlendFactor);
+        return float4(CMotionEstimation_GetPixelPyLK(Input.Tex0, Vectors, SampleTex2c, SampleTempTex2b), 0.0, _BlendFactor);
     }
 
     // Postfilter blur
 
     // We use MRT to immeduately copy the current blurred frame for the next frame
-    float4 PS_HBlur_Postfilter(VS2PS_Quad Input, out float4 Copy : SV_TARGET0) : SV_TARGET1
+    float4 PS_HBlur_Postfilter(CShade_VS2PS_Quad Input, out float4 Copy : SV_TARGET0) : SV_TARGET1
     {
         Copy = tex2D(SampleTempTex2b, Input.Tex0.xy);
-        return float4(GetPixelBlur(Input, SampleOFlowTex, true).rg, 0.0, 1.0);
+        return float4(CBlur_GetPixelBlur(Input, SampleOFlowTex, true).rg, 0.0, 1.0);
     }
 
-    float4 PS_VBlur_Postfilter(VS2PS_Quad Input) : SV_TARGET0
+    float4 PS_VBlur_Postfilter(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
-        return float4(GetPixelBlur(Input, SampleTempTex2a, false).rg, 0.0, 1.0);
+        return float4(CBlur_GetPixelBlur(Input, SampleTempTex2a, false).rg, 0.0, 1.0);
     }
 
-    float4 PS_MotionBlur(VS2PS_Quad Input) : SV_TARGET0
+    float4 PS_MotionBlur(CShade_VS2PS_Quad Input) : SV_TARGET0
     {
         float4 OutputColor = 0.0;
         const int Samples = 16;
-
 
         float FrameRate = 1e+3 / _FrameTime;
         float FrameTimeRatio = _TargetFrameRate / FrameRate;
@@ -138,7 +146,7 @@ namespace cMotionBlur
         float2 ScreenSize = float2(BUFFER_WIDTH, BUFFER_HEIGHT);
         float2 ScreenCoord = Input.Tex0.xy;
 
-        float2 Velocity = UnpackMotionVectors(tex2Dlod(SampleTempTex2b, float4(Input.Tex0.xy, 0.0, _MipBias)).xy);
+        float2 Velocity = CMotionEstimation_UnpackMotionVectors(tex2Dlod(SampleTempTex2b, float4(Input.Tex0.xy, 0.0, _MipBias)).xy);
 
         float2 ScaledVelocity = Velocity * _Scale;
         ScaledVelocity = (_FrameRateScaling) ? ScaledVelocity / FrameTimeRatio : ScaledVelocity;
@@ -146,7 +154,7 @@ namespace cMotionBlur
         [unroll]
         for (int k = 0; k < Samples; ++k)
         {
-            float Random = (GetIGNoise(Input.HPos.xy + k) * 2.0) - 1.0;
+            float Random = (CProcedural_GetInterleavedGradientNoise(Input.HPos.xy + k) * 2.0) - 1.0;
             float2 RandomTex = Input.Tex0.xy + (ScaledVelocity * Random);
             OutputColor += tex2D(CShade_SampleColorTex, RandomTex);
         }
@@ -165,16 +173,16 @@ namespace cMotionBlur
     technique CShade_MotionBlur
     {
         // Normalize current frame
-        CREATE_PASS(VS_Quad, PS_Normalize, TempTex1_RG8)
+        CREATE_PASS(CShade_VS_Quad, PS_Normalize, TempTex1_RG8)
 
         // Prefilter blur
-        CREATE_PASS(VS_Quad, PS_HBlur_Prefilter, TempTex2a_RG16F)
-        CREATE_PASS(VS_Quad, PS_VBlur_Prefilter, TempTex2b_RG16F)
+        CREATE_PASS(CShade_VS_Quad, PS_HBlur_Prefilter, TempTex2a_RG16F)
+        CREATE_PASS(CShade_VS_Quad, PS_VBlur_Prefilter, TempTex2b_RG16F)
 
         // Bilinear Lucas-Kanade Optical Flow
-        CREATE_PASS(VS_Quad, PS_PyLK_Level4, TempTex5_RG16F)
-        CREATE_PASS(VS_Quad, PS_PyLK_Level3, TempTex4_RG16F)
-        CREATE_PASS(VS_Quad, PS_PyLK_Level2, TempTex3_RG16F)
+        CREATE_PASS(CShade_VS_Quad, PS_PyLK_Level4, TempTex5_RG16F)
+        CREATE_PASS(CShade_VS_Quad, PS_PyLK_Level3, TempTex4_RG16F)
+        CREATE_PASS(CShade_VS_Quad, PS_PyLK_Level2, TempTex3_RG16F)
         pass GetFineOpticalFlow
         {
             ClearRenderTargets = FALSE;
@@ -183,7 +191,7 @@ namespace cMotionBlur
             SrcBlend = INVSRCALPHA;
             DestBlend = SRCALPHA;
 
-            VertexShader = VS_Quad;
+            VertexShader = CShade_VS_Quad;
             PixelShader = PS_PyLK_Level1;
             RenderTarget0 = OFlowTex;
         }
@@ -191,7 +199,7 @@ namespace cMotionBlur
         // Postfilter blur
         pass MRT_CopyAndBlur
         {
-            VertexShader = VS_Quad;
+            VertexShader = CShade_VS_Quad;
             PixelShader = PS_HBlur_Postfilter;
             RenderTarget0 = Tex2c;
             RenderTarget1 = TempTex2a_RG16F;
@@ -199,7 +207,7 @@ namespace cMotionBlur
 
         pass
         {
-            VertexShader = VS_Quad;
+            VertexShader = CShade_VS_Quad;
             PixelShader = PS_VBlur_Postfilter;
             RenderTarget0 = TempTex2b_RG16F;
         }
@@ -209,7 +217,7 @@ namespace cMotionBlur
         {
             SRGBWriteEnable = WRITE_SRGB;
 
-            VertexShader = VS_Quad;
+            VertexShader = CShade_VS_Quad;
             PixelShader = PS_MotionBlur;
         }
     }
