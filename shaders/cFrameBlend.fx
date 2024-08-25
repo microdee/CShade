@@ -1,23 +1,24 @@
 
-#include "shared/cShade.fxh"
-
 /*
     [Shader Options]
 */
 
 uniform float _BlendFactor <
-    ui_label = "Blend Factor";
+    ui_label = "Frame Blending";
     ui_type = "slider";
     ui_min = 0.0;
     ui_max = 1.0;
 > = 0.5;
+
+#include "shared/cShade.fxh"
+#include "shared/cBlend.fxh"
 
 /*
     [Textures & Samplers]
 */
 
 CREATE_TEXTURE(BlendTex, BUFFER_SIZE_0, RGBA8, 1)
-CREATE_SRGB_SAMPLER(SampleBlendTex, BlendTex, 1, CLAMP)
+CREATE_SRGB_SAMPLER(SampleBlendTex, BlendTex, 1, CLAMP, CLAMP, CLAMP)
 
 /*
     [Pixel Shaders]
@@ -32,10 +33,10 @@ float4 PS_Blend(CShade_VS2PS_Quad Input) : SV_TARGET0
 float4 PS_Display(CShade_VS2PS_Quad Input) : SV_TARGET0
 {
     // Display the buffer
-    return tex2D(SampleBlendTex, Input.Tex0);
+    return CBlend_OutputChannels(float4(tex2D(SampleBlendTex, Input.Tex0).rgb, _CShadeAlphaFactor));
 }
 
-technique CShade_FrameBlending
+technique CShade_FrameBlend
 {
     pass
     {
@@ -54,6 +55,7 @@ technique CShade_FrameBlending
     pass
     {
         SRGBWriteEnable = WRITE_SRGB;
+        CBLEND_CREATE_STATES()
 
         VertexShader = CShade_VS_Quad;
         PixelShader = PS_Display;

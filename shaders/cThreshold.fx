@@ -1,7 +1,4 @@
 
-#include "shared/cShade.fxh"
-#include "shared/cMath.fxh"
-
 /*
     [Shader Options]
 */
@@ -30,6 +27,11 @@ uniform float _Intensity <
     ui_min = 0.0;
 > = 1.0;
 
+#include "shared/cMath.fxh"
+
+#include "shared/cShade.fxh"
+#include "shared/cBlend.fxh"
+
 /*
     [Pixel Shaders]
 */
@@ -41,14 +43,14 @@ float4 PS_Threshold(CShade_VS2PS_Quad Input) : SV_TARGET0
     float4 Color = tex2D(CShade_SampleColorTex, Input.Tex0);
 
     // Under-threshold
-    float Brightness = CMath_Med3(Color.r, Color.g, Color.b);
+    float Brightness = CMath_Med3(Color.r, Color.g, Color.b).a;
     float ResponseCurve = clamp(Brightness - Curve.x, 0.0, Curve.y);
     ResponseCurve = Curve.z * ResponseCurve * ResponseCurve;
 
     // Combine and apply the brightness response curve
     Color = Color * max(ResponseCurve, Brightness - _Threshold) / max(Brightness, 1e-10);
-    Brightness = CMath_Med3(Color.r, Color.g, Color.b);
-    return saturate(lerp(Brightness, Color, _Saturation) * _Intensity);
+    Brightness = CMath_Med3(Color.r, Color.g, Color.b).a;
+    return CBlend_OutputChannels(float4(saturate(lerp(Brightness, Color.rgb, _Saturation) * _Intensity), _CShadeAlphaFactor));
 }
 
 technique CShade_Threshold
@@ -56,6 +58,7 @@ technique CShade_Threshold
     pass
     {
         SRGBWriteEnable = WRITE_SRGB;
+        CBLEND_CREATE_STATES()
 
         VertexShader = CShade_VS_Quad;
         PixelShader = PS_Threshold;

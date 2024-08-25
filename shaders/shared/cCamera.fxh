@@ -12,7 +12,7 @@
 
     #if defined(INCLUDE_CCAMERA_INPUT)
         uniform float _CShadeExposureSmoothingSpeed <
-            ui_category = "Output: AutoExposure";
+            ui_category = "[ Pipeline | Output | AutoExposure ]";
             ui_label = "Smoothing Speed";
             ui_type = "slider";
             ui_min = 0.1;
@@ -30,8 +30,8 @@
 
     #if defined(INCLUDE_CCAMERA_OUTPUT)
         uniform float _CShadeExposureBias <
-            ui_category = "Output: AutoExposure";
-            ui_label = "Exposure Compensation Bias";
+            ui_category = "[ Pipeline | Output | AutoExposure ]";
+            ui_label = "Compensation Bias";
             ui_type = "slider";
             ui_step = 0.001;
             ui_min = -4.0;
@@ -39,8 +39,8 @@
         > = 1.0;
 
         uniform float _CShadeExposureRange <
-            ui_category = "Output: AutoExposure";
-            ui_label = "Exposure Compensation Range";
+            ui_category = "[ Pipeline | Output | AutoExposure ]";
+            ui_label = "Compensation Range";
             ui_type = "slider";
             ui_step = 0.001;
             ui_min = 1.0;

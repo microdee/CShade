@@ -1,12 +1,12 @@
 
 #if !defined(INCLUDE_MACROS)
+    #define INCLUDE_MACROS
+
     /*
         [Macros and macro accessories]
         ---
         https://graphics.stanford.edu/~seander/bithacks.html
     */
-
-    #define INCLUDE_MACROS
 
     #define GET_EVEN(X) (X + (X & 1))
     #define GET_MIN(X, Y) (Y ^ ((X ^ Y) & -(X < Y)))
@@ -50,37 +50,6 @@
             Height = SIZE.y; \
             Format = FORMAT; \
             MipLevels = LEVELS; \
-        };
-
-    #define CREATE_SAMPLER(SAMPLER_NAME, TEXTURE, FILTER, ADDRESS) \
-        sampler2D SAMPLER_NAME \
-        { \
-            Texture = TEXTURE; \
-            MagFilter = FILTER; \
-            MinFilter = FILTER; \
-            MipFilter = FILTER; \
-            AddressU = ADDRESS; \
-            AddressV = ADDRESS; \
-        };
-
-    #if BUFFER_COLOR_BIT_DEPTH == 8
-        #define READ_SRGB TRUE
-        #define WRITE_SRGB TRUE
-    #else
-        #define READ_SRGB FALSE
-        #define WRITE_SRGB FALSE
-    #endif
-
-    #define CREATE_SRGB_SAMPLER(SAMPLER_NAME, TEXTURE, FILTER, ADDRESS) \
-        sampler2D SAMPLER_NAME \
-        { \
-            Texture = TEXTURE; \
-            MagFilter = FILTER; \
-            MinFilter = FILTER; \
-            MipFilter = FILTER; \
-            AddressU = ADDRESS; \
-            AddressV = ADDRESS; \
-            SRGBTexture = READ_SRGB; \
         };
 
 #endif

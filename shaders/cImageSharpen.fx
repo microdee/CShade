@@ -1,7 +1,4 @@
 
-#include "shared/cShade.fxh"
-#include "shared/fidelityfx/cCas.fxh"
-
 /*
     Bilinear modification of AMD's CAS algorithm.
 
@@ -30,26 +27,63 @@
     THE SOFTWARE.
 */
 
+uniform int _Detection <
+    ui_label = "Detection Mode";
+    ui_type = "combo";
+    ui_items = "Multi-Channel\0Single-Channel (Average)\0Single-Channel (Max)\0";
+> = 0;
+
+uniform int _Kernel <
+    ui_label = "Kernel Shape";
+    ui_type = "combo";
+    ui_items = "CAS: Box\0CAS: Diamond\0CShade: Bilinear Diamond\0";
+> = 1;
+
 uniform float _Contrast <
     ui_label = "Contrast";
     ui_type = "slider";
-    ui_step = 0.001;
     ui_min = 0.0;
     ui_max = 1.0;
 > = 0.0;
 
+uniform int _RenderMode <
+    ui_label = "Render Mode";
+    ui_type = "combo";
+    ui_items = "Render Image\0Render Mask\0";
+> = 0;
+
+#include "shared/fidelityfx/cCas.fxh"
+
+#include "shared/cShade.fxh"
+#include "shared/cBlend.fxh"
+
 float4 PS_CasFilterNoScaling(CShade_VS2PS_Quad Input): SV_TARGET0
 {
     float4 OutputColor = 1.0;
-    FFX_CAS_FilterNoScaling(OutputColor.rgb, Input, _Contrast);
-    return OutputColor;
+    float4 OutputMask = 1.0;
+    FFX_CAS_FilterNoScaling(
+        OutputColor,
+        OutputMask,
+        Input,
+        _Detection,
+        _Kernel,
+        _Contrast
+    );
+
+    if (_RenderMode == 1)
+    {
+        OutputColor = OutputMask;
+    }
+
+    return CBlend_OutputChannels(float4(OutputColor.rgb, _CShadeAlphaFactor));
 }
 
-technique CShade_ImageSharpening
+technique CShade_ImageSharpen
 {
     pass
     {
         SRGBWriteEnable = WRITE_SRGB;
+        CBLEND_CREATE_STATES()
 
         VertexShader = CShade_VS_Quad;
         PixelShader = PS_CasFilterNoScaling;

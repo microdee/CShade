@@ -1,16 +1,4 @@
 
-#include "shared/cMacros.fxh"
-#include "shared/cShade.fxh"
-
-#define INCLUDE_CCAMERA_INPUT
-#define INCLUDE_CCAMERA_OUTPUT
-#include "shared/cCamera.fxh"
-
-#define INCLUDE_CTONEMAP_OUTPUT
-#include "shared/cTonemap.fxh"
-
-#include "shared/cProcedural.fxh"
-
 /*
     Automatic exposure shader using hardware blending
 */
@@ -22,14 +10,14 @@
 uniform float _Frametime < source = "frametime"; >;
 
 uniform int _Meter <
-    ui_category = "Main Shader: Metering";
+    ui_category = "Exposure | Metering";
     ui_label = "Method";
     ui_type = "combo";
     ui_items = "Average\0Spot\0";
 > = 0;
 
 uniform float _Scale <
-    ui_category = "Main Shader: Metering";
+    ui_category = "Exposure | Metering";
     ui_label = "Spot Scale";
     ui_type = "slider";
     ui_min = 0.0;
@@ -37,7 +25,7 @@ uniform float _Scale <
 > = 0.5;
 
 uniform float2 _Offset <
-    ui_category = "Main Shader: Metering";
+    ui_category = "Exposure | Metering";
     ui_label = "Spot Offset";
     ui_type = "slider";
     ui_min = -1.0;
@@ -45,23 +33,36 @@ uniform float2 _Offset <
 > = 0.0;
 
 uniform bool _DisplayAverageLuma <
-    ui_category = "Main Shader: Debug";
+    ui_category = "Shader | Debug";
     ui_label = "Display Average Luminance";
     ui_type = "radio";
 > = false;
 
 uniform bool _DisplaySpotMeterMask <
-    ui_category = "Main Shader: Debug";
+    ui_category = "Shader | Debug";
     ui_label = "Display Spot Metering";
     ui_type = "radio";
 > = false;
+
+#include "shared/cMacros.fxh"
+#include "shared/cProcedural.fxh"
+
+#define INCLUDE_CCAMERA_INPUT
+#define INCLUDE_CCAMERA_OUTPUT
+#include "shared/cCamera.fxh"
+
+#define INCLUDE_CTONEMAP_OUTPUT
+#include "shared/cTonemap.fxh"
+
+#include "shared/cShade.fxh"
+#include "shared/cBlend.fxh"
 
 /*
     [Textures & Samplers]
 */
 
 CREATE_TEXTURE(LumaTex, int2(256, 256), R16F, 9)
-CREATE_SAMPLER(SampleLumaTex, LumaTex, LINEAR, CLAMP)
+CREATE_SAMPLER(SampleLumaTex, LumaTex, LINEAR, CLAMP, CLAMP, CLAMP)
 
 /*
     [Pixel Shaders]
@@ -168,7 +169,7 @@ float3 PS_Exposure(CShade_VS2PS_Quad Input) : SV_TARGET0
         Output = lerp(Output, LumaIcon.rgb, LumaIcon.a);
     }
 
-    return Output;
+    return CBlend_OutputChannels(float4(Output.rgb, _CShadeAlphaFactor));
 }
 
 technique CShade_AutoExposure
@@ -189,6 +190,7 @@ technique CShade_AutoExposure
     pass
     {
         SRGBWriteEnable = WRITE_SRGB;
+        CBLEND_CREATE_STATES()
 
         VertexShader = CShade_VS_Quad;
         PixelShader = PS_Exposure;

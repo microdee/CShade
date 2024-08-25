@@ -1,7 +1,4 @@
 
-#include "shared/cShade.fxh"
-#include "shared/cColor.fxh"
-
 /*
     [Shader Options]
 */
@@ -12,6 +9,11 @@ uniform int _Select <
     ui_items = "Average\0Min\0Median\0Max\0Length\0Min+Max\0None\0";
 > = 0;
 
+#include "shared/cColor.fxh"
+
+#include "shared/cShade.fxh"
+#include "shared/cBlend.fxh"
+
 /*
     [Pixel Shaders]
 */
@@ -19,8 +21,8 @@ uniform int _Select <
 float4 PS_Luminance(CShade_VS2PS_Quad Input) : SV_TARGET0
 {
     float4 Color = tex2D(CShade_SampleColorTex, Input.Tex0);
-    float4 OutputColor = CColor_GetLuma(Color, _Select);
-    return OutputColor;
+    float3 Luma = CColor_GetLuma(Color.rgb, _Select);
+    return CBlend_OutputChannels(float4(Luma, _CShadeAlphaFactor));
 }
 
 technique CShade_Grayscale
@@ -28,6 +30,7 @@ technique CShade_Grayscale
     pass
     {
         SRGBWriteEnable = WRITE_SRGB;
+        CBLEND_CREATE_STATES()
 
         VertexShader = CShade_VS_Quad;
         PixelShader = PS_Luminance;

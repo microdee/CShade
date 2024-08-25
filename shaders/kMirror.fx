@@ -1,6 +1,4 @@
 
-#include "shared/cShade.fxh"
-
 /*
     MIT License
 
@@ -29,19 +27,26 @@
 */
 
 uniform float _Divisor <
+    ui_label = "Divisor";
     ui_type = "drag";
 > = 0.05;
 
 uniform float _Offset <
+    ui_label = "Offset";
     ui_type = "drag";
 > = 0.05;
 
 uniform float _Roll <
+    ui_label = "Roll";
     ui_type = "drag";
 > = 0.0;
 
 uniform bool _Symmetry <
+    ui_label = "Symmetry";
 > = true;
+
+#include "shared/cShade.fxh"
+#include "shared/cBlend.fxh"
 
 /*
     [Pixel Shaders]
@@ -67,7 +72,7 @@ float4 PS_Mirror(CShade_VS2PS_Quad Input) : SV_TARGET0
 
     // Reflection at the border of the screen.
     Input.Tex0 = max(min(Input.Tex0, 2.0 - Input.Tex0), -Input.Tex0);
-    return tex2D(CShade_SampleColorTex, Input.Tex0);
+    return CBlend_OutputChannels(float4(tex2D(CShade_SampleColorTex, Input.Tex0).rgb, _CShadeAlphaFactor));
 }
 
 technique CShade_KinoMirror
@@ -75,6 +80,7 @@ technique CShade_KinoMirror
     pass
     {
         SRGBWriteEnable = WRITE_SRGB;
+        CBLEND_CREATE_STATES()
 
         VertexShader = CShade_VS_Quad;
         PixelShader = PS_Mirror;
