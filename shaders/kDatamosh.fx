@@ -4,10 +4,6 @@
 #include "shared/cBlur.fxh"
 #include "shared/cMotionEstimation.fxh"
 
-#ifndef USE_LAUNCHPAD
-#define USE_LAUNCHPAD 0
-#endif
-
 /*
     This is free and unencumbered software released into the public domain.
 
@@ -35,15 +31,48 @@
     For more information, please refer to <http://unlicense.org/>
 */
 
-#if USE_LAUNCHPAD
-namespace Deferred 
-{
-	texture MotionVectorsTex { Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RG16F; };
-}
+#define __DEFAULT_TEXTURE_FORMAT RG16F
+#include "ReferrerMacroScheme.fxh"
+
+#define __EXTERNAL_MAGIC_SCALE -70000
+
+#define Declare_InternalVelocity() CREATE_TEXTURE(OFlowTex, BUFFER_SIZE_2, RG16F, 1)
+#define Use_InternalVelocity() OFlowTex
+#define MagicScale_InternalVelocity() 1
+#define OFlowPass_InternalVelocity() 1
+
+#define Declare_LaunchPad() Declare_NamespaceTexture(Deferred, MotionVectorsTex)
+#define Use_LaunchPad() Use_NamespaceTexture(Deferred, MotionVectorsTex)
+#define MagicScale_LaunchPad() __EXTERNAL_MAGIC_SCALE
+#define OFlowPass_LaunchPad() 0
+
+#define Declare_LaunchPad_Old() Declare_NamespaceTexture(Velocity, OldMotionVectorsTex)
+#define Use_LaunchPad_Old() Use_NamespaceTexture(Velocity, OldMotionVectorsTex)
+#define MagicScale_LaunchPad_Old() __EXTERNAL_MAGIC_SCALE
+#define OFlowPass_LaunchPad_Old() 0
+
+#define Declare_Retained() Declare_Texture(texRetainedVelocity)
+#define Use_Retained() texRetainedVelocity
+#define MagicScale_Retained() __EXTERNAL_MAGIC_SCALE
+#define OFlowPass_Retained() 0
+
+#define MagicScale_Texture(name) __EXTERNAL_MAGIC_SCALE
+#define OFlowPass_Texture() 0
+
+#define MagicScale_NamespaceTexture(ns, name) __EXTERNAL_MAGIC_SCALE
+#define OFlowPass_NamespaceTexture() 0
+
+#ifndef VELOCITY_TEXTURE
+#define VELOCITY_TEXTURE InternalVelocity()
 #endif
 
-namespace kDatamosh
-{
+#define OFlowFiltered_InternalVelocity() TempTex2b_RG16F
+#define OFlowFiltered_LaunchPad() Use_LaunchPad()
+#define OFlowFiltered_LaunchPad_Old() Use_LaunchPad_Old()
+#define OFlowFiltered_Retained() Use_Retained()
+#define OFlowFiltered_Texture(name) Use_Texture(name)
+#define OFlowFiltered_NamespaceTexture(ns, name) Use_NamespaceTexture(ns, name)
+
     /*
         [Shader Options]
     */
@@ -137,21 +166,25 @@ namespace kDatamosh
     CREATE_TEXTURE(Tex2c, BUFFER_SIZE_2, RG16F, 8)
     CREATE_SAMPLER(SampleTex2c, Tex2c, LINEAR, MIRROR)
     
-#if USE_LAUNCHPAD
-    CREATE_SAMPLER(SampleOFlowTex, Deferred::MotionVectorsTex, LINEAR, MIRROR)
-    CREATE_SAMPLER(SampleFilteredFlowTex, Deferred::MotionVectorsTex, FILTERING, MIRROR)
-#else
-    CREATE_TEXTURE(OFlowTex, BUFFER_SIZE_2, RG16F, 1)
-    CREATE_SAMPLER(SampleOFlowTex, OFlowTex, LINEAR, MIRROR)
-    CREATE_SAMPLER(SampleFilteredFlowTex, TempTex2b_RG16F, FILTERING, MIRROR)
-#endif
-
+    REFERRER(Declare, VELOCITY_TEXTURE)
+    CREATE_SAMPLER(SampleOFlowTex, REFERRER(Use, VELOCITY_TEXTURE), LINEAR, MIRROR)
+    CREATE_SAMPLER(SampleFilteredFlowTex, REFERRER(OFlowFiltered, VELOCITY_TEXTURE), FILTERING, MIRROR)
 
     CREATE_TEXTURE(AccumTex, BUFFER_SIZE_0, R16F, 1)
     CREATE_SAMPLER(SampleAccumTex, AccumTex, FILTERING, MIRROR)
 
     CREATE_TEXTURE(FeedbackTex, BUFFER_SIZE_0, RGBA8, 1)
     CREATE_SRGB_SAMPLER(SampleFeedbackTex, FeedbackTex, LINEAR, MIRROR)
+
+	float2 GetMotionVectors(float2 uv, float mipMap)
+	{
+		return tex2Dlod(SampleFilteredFlowTex, float4(uv, 0.0, _MipBias)).xy * REFERRER(MagicScale, VELOCITY_TEXTURE);
+	}
+	
+	float2 GetMotionVectorsLinear(float2 uv, float mipMap)
+	{
+		return tex2Dlod(SampleOFlowTex, float4(uv, 0.0, _MipBias)).xy * REFERRER(MagicScale, VELOCITY_TEXTURE);
+	}
 
     /*
         [Pixel Shaders]
@@ -201,7 +234,8 @@ namespace kDatamosh
     float4 PS_HBlur_Postfilter(CShade_VS2PS_Quad Input, out float4 Copy : SV_TARGET0) : SV_TARGET1
     {
         Copy = tex2D(SampleTempTex2b, Input.Tex0.xy);
-        return float4(CBlur_GetPixelBlur(Input, SampleOFlowTex, true).rg, 0.0, 1.0);
+        //return float4(CBlur_GetPixelBlur(Input, SampleOFlowTex, true).rg, 0.0, 1.0);
+        return float4(CBlur_GetPixelBlur(Input, SampleOFlowTex, true).rg * REFERRER(MagicScale, VELOCITY_TEXTURE), 0.0, 1.0);
     }
 
     float4 PS_VBlur_Postfilter(CShade_VS2PS_Quad Input) : SV_TARGET0
@@ -228,11 +262,10 @@ namespace kDatamosh
         Random.z = RandUV(Tex.yx - Time.xx);
 
         // Normalized screen space -> Pixel coordinates
-        float Scale = USE_LAUNCHPAD ? -_Scale : _Scale;
-        MV = CMotionEstimation_UnnormalizeMotionVectors(MV * Scale, TexSize);
+        MV = CMotionEstimation_UnnormalizeMotionVectors(MV * _Scale, TexSize);
 
         // Small random displacement (diffusion)
-        MV += (Random.xy - 0.5)  * _Diffusion;
+        MV += (Random.xy)  * _Diffusion * TexSize;
 
         // Pixel perfect snapping
         return round(MV);
@@ -244,7 +277,8 @@ namespace kDatamosh
         float3 Random = 0.0;
 
         // Motion vectors
-        float2 MV = CMotionEstimation_UnpackMotionVectors(tex2Dlod(SampleFilteredFlowTex, float4(Input.Tex0, 0.0, _MipBias)).xy);
+        float2 MV = GetMotionVectors(Input.Tex0, _MipBias);
+        MV = CMotionEstimation_UnpackMotionVectors(MV);
 
         // Get motion blocks
         MV = GetMVBlocks(MV, Input.Tex0, Random);
@@ -283,7 +317,7 @@ namespace kDatamosh
         float3 Random = 0.0;
 
         // Motion vectors
-        float2 MV = CMotionEstimation_UnpackMotionVectors(tex2Dlod(SampleFilteredFlowTex, float4(Input.Tex0, 0.0, _MipBias)).xy);
+        float2 MV = CMotionEstimation_UnpackMotionVectors(GetMotionVectors(Input.Tex0, _MipBias));
 
         // Get motion blocks
         MV = GetMVBlocks(MV, Input.Tex0, Random);
@@ -350,7 +384,7 @@ namespace kDatamosh
         CREATE_PASS(CShade_VS_Quad, PS_PyLK_Level3, TempTex4_RG16F)
         CREATE_PASS(CShade_VS_Quad, PS_PyLK_Level2, TempTex3_RG16F)
         
-#if !USE_LAUNCHPAD
+#if REFERRER(OFlowPass, VELOCITY_TEXTURE)
         pass GetFineOpticalFlow
         {
             ClearRenderTargets = FALSE;
@@ -412,4 +446,3 @@ namespace kDatamosh
             RenderTarget0 = FeedbackTex;
         }
     }
-}
